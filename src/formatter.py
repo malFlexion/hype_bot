@@ -245,18 +245,21 @@ class ResponseFormatter:
         else:
             thread.append("👑 No all-time posts found")
 
-        # Post 3: Most ratioed
+        # Post 3: Most ratioed (only if ratio is 3:1 or worse)
         if most_ratioed:
             post, ratio = most_ratioed
-            text = self.format_thread_post(
-                emoji="🌶️",
-                title="Most Ratioed",
-                post=post,
-                score_text=f"Ratio: {ratio:.2f}",
-                handle=handle
-            )
-            thread.append(text)
+            if ratio >= 3.0:
+                text = self.format_thread_post(
+                    emoji="🌶️",
+                    title="Most Ratioed",
+                    post=post,
+                    score_text=f"Ratio: {ratio:.1f}",
+                    handle=handle
+                )
+                thread.append(text)
+            else:
+                thread.append(f"No ratio here! Keep posting those bangers 🔥")
         else:
-            thread.append("🌶️ No posts with enough engagement for ratio analysis")
+            thread.append(f"No ratio here! Keep posting those bangers 🔥")
 
         return thread
