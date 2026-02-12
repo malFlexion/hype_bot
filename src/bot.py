@@ -90,6 +90,17 @@ class BlueskyBot:
 
             logger.info(f"Processing mention from @{author_handle} ({author_did})")
 
+            # Check if the user follows the bot
+            if not self.client.is_following_bot(author_did):
+                logger.info(f"@{author_handle} is not following the bot, sending follow prompt")
+                self.client.send_reply(
+                    text=f"@{author_handle} Follow me first and then tag me again to get your hype! 📊",
+                    parent_uri=mention_uri,
+                    parent_cid=mention_cid
+                )
+                self.tracker.mark_processed(mention_uri)
+                return True
+
             # Fetch the author's posts
             posts = self.client.fetch_all_posts(
                 actor=author_did,

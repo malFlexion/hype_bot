@@ -254,6 +254,26 @@ class BlueskyClient:
             logger.error(f"Error updating seen notifications: {e}")
             return False
 
+    def is_following_bot(self, actor_did: str) -> bool:
+        """
+        Check if a user follows the bot.
+
+        Args:
+            actor_did: DID of the user to check
+
+        Returns:
+            True if the user follows the bot, False otherwise
+        """
+        try:
+            profile = self.client.app.bsky.actor.get_profile({'actor': actor_did})
+            viewer = getattr(profile, 'viewer', None)
+            if viewer and getattr(viewer, 'followed_by', None):
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error checking follow status for {actor_did}: {e}")
+            return False
+
     def get_profile(self, actor: str) -> Optional[Any]:
         """
         Get profile information for a user.

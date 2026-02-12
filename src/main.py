@@ -100,6 +100,11 @@ def run_test(handle: str):
     )
     client.login()
 
+    # Check if user follows the bot
+    if not client.is_following_bot(handle):
+        print(f"\n@{handle} does not follow the bot. They would be asked to follow first.")
+        return
+
     # Fetch posts
     logger.info(f"Fetching posts for @{handle}...")
     posts = client.fetch_all_posts(actor=handle, max_posts=Config.MAX_POSTS)
