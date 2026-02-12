@@ -1,0 +1,38 @@
+# Fly.io configuration for Bluesky Engagement Bot
+
+app = "bluesky-engagement-bot"
+primary_region = "iad"  # US East - change to your preferred region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  POLL_INTERVAL = "30"
+  RECENT_DAYS = "30"
+  MAX_POSTS = "1000"
+  LOG_LEVEL = "INFO"
+  MIN_ENGAGEMENT_FOR_RATIO = "5"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false  # Keep running 24/7
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+# Optional: Persistent storage for tracking last seen notifications
+# Uncomment if you want to persist state across restarts
+# [mounts]
+#   source = "data"
+#   destination = "/app/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
