@@ -140,7 +140,7 @@ class BlueskyClient:
             logger.error(f"Error fetching feed for {actor}: {e}")
             return {'feed': [], 'cursor': None}
 
-    def fetch_all_posts(self, actor: str, max_posts: int = 100000) -> List[Any]:
+    def fetch_all_posts(self, actor: str, max_posts: int = 10000) -> List[Any]:
         """
         Fetch all posts from a user with pagination.
 
