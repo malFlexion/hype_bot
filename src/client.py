@@ -10,7 +10,6 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 from atproto import Client as AtProtoClient, models
 
-
 logger = logging.getLogger(__name__)
 
 _URL_PATTERN = re.compile(r'https?://[^\s\)\]\}>,"\']+', re.IGNORECASE)
@@ -168,7 +167,20 @@ class BlueskyClient:
                 if hasattr(item, 'post') and hasattr(item.post, 'record'):
                     # Check if it's a repost
                     if not hasattr(item, 'reason') or item.reason is None:
-                        all_posts.append(item.post)
+                        post = item.post
+                        # Extract minimal fields
+                        post_dict = {
+                            'like_count': getattr(post, 'like_count', 0),
+                            'repost_count': getattr(post, 'repost_count', 0),
+                            'reply_count': getattr(post, 'reply_count', 0),
+                            'uri': getattr(post, 'uri', None),
+                            'indexed_at': getattr(post, 'indexed_at', None),
+                            'record': None
+                        }
+                        record = getattr(post, 'record', None)
+                        if record:
+                            post_dict['record'] = record
+                        all_posts.append(post_dict)
 
                 if len(all_posts) >= max_posts:
                     break

@@ -83,11 +83,13 @@ class ResponseFormatter:
             Truncated post text
         """
         try:
-            if hasattr(post, 'record') and hasattr(post.record, 'text'):
-                text = post.record.text
-                # Clean up whitespace
-                text = ' '.join(text.split())
-                return f'"{self.truncate_text(text, self.MAX_TEXT_PREVIEW)}"'
+            record = post.get('record') if isinstance(post, dict) else getattr(post, 'record', None)
+            if record:
+                # Handle both dict and object for record
+                text = record.get('text') if isinstance(record, dict) else getattr(record, 'text', None)
+                if text:
+                    text = ' '.join(text.split())
+                    return f'"{self.truncate_text(text, self.MAX_TEXT_PREVIEW)}"'
         except Exception as e:
             logger.warning(f"Error extracting post text: {e}")
 
@@ -103,9 +105,14 @@ class ResponseFormatter:
         Returns:
             Tuple of (likes, reposts, replies)
         """
-        likes = post.like_count if hasattr(post, 'like_count') else 0
-        reposts = post.repost_count if hasattr(post, 'repost_count') else 0
-        replies = post.reply_count if hasattr(post, 'reply_count') else 0
+        if isinstance(post, dict):
+            likes = post.get('like_count', 0)
+            reposts = post.get('repost_count', 0)
+            replies = post.get('reply_count', 0)
+        else:
+            likes = getattr(post, 'like_count', 0)
+            reposts = getattr(post, 'repost_count', 0)
+            replies = getattr(post, 'reply_count', 0)
         return likes, reposts, replies
 
     def format_thread_post(
@@ -135,9 +142,13 @@ class ResponseFormatter:
 
         # Get post preview
         preview = self.get_post_preview(post)
-
+        
         # Get URL
-        url = self.uri_to_url(post.uri, handle)
+        if isinstance(post, dict):
+            uri = post.get('uri')
+        else:
+            uri = getattr(post, 'uri', None)
+        url = self.uri_to_url(uri, handle)
 
         # Build the post
         parts = [

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class PostAnalytics:
     """Post engagement analytics."""
 
-    def __init__(self, min_engagement_for_ratio: int = 5):
+    def __init__(self, min_engagement_for_ratio: int = 1):
         """
         Initialize analytics engine.
 
@@ -34,10 +34,14 @@ class PostAnalytics:
         Returns:
             Total engagement score
         """
-        likes = post.like_count if hasattr(post, 'like_count') else 0
-        reposts = post.repost_count if hasattr(post, 'repost_count') else 0
-        replies = post.reply_count if hasattr(post, 'reply_count') else 0
-
+        if isinstance(post, dict):
+            likes = post.get('like_count', 0)
+            reposts = post.get('repost_count', 0)
+            replies = post.get('reply_count', 0)
+        else:
+            likes = getattr(post, 'like_count', 0)
+            reposts = getattr(post, 'repost_count', 0)
+            replies = getattr(post, 'reply_count', 0)
         return likes + reposts + replies
 
     @staticmethod
@@ -53,9 +57,12 @@ class PostAnalytics:
         Returns:
             Ratio of replies to likes (replies / max(likes, 1))
         """
-        likes = post.like_count if hasattr(post, 'like_count') else 0
-        replies = post.reply_count if hasattr(post, 'reply_count') else 0
-
+        if isinstance(post, dict):
+            likes = post.get('like_count', 0)
+            replies = post.get('reply_count', 0)
+        else:
+            likes = getattr(post, 'like_count', 0)
+            replies = getattr(post, 'reply_count', 0)
         # Avoid division by zero
         return replies / max(likes, 1)
 
@@ -71,10 +78,19 @@ class PostAnalytics:
             Datetime object or None if not available
         """
         try:
-            if hasattr(post, 'indexed_at'):
-                return parser.parse(post.indexed_at)
-            elif hasattr(post, 'record') and hasattr(post.record, 'created_at'):
-                return parser.parse(post.record.created_at)
+            if isinstance(post, dict):
+                if 'indexed_at' in post and post['indexed_at']:
+                    return parser.parse(post['indexed_at'])
+                record = post.get('record')
+                if record:
+                    created_at = record.get('created_at') if isinstance(record, dict) else getattr(record, 'created_at', None)
+                    if created_at:
+                        return parser.parse(created_at)
+            else:
+                if hasattr(post, 'indexed_at'):
+                    return parser.parse(post.indexed_at)
+                elif hasattr(post, 'record') and hasattr(post.record, 'created_at'):
+                    return parser.parse(post.record.created_at)
             return None
         except Exception as e:
             logger.warning(f"Error parsing post date: {e}")
@@ -169,7 +185,10 @@ class PostAnalytics:
         qualifying_posts = []
 
         for post in posts:
-            likes = post.like_count if hasattr(post, 'like_count') else 0
+            if isinstance(post, dict):
+                likes = post.get('like_count', 0)
+            else:
+                likes = getattr(post, 'like_count', 0)
 
             # Only consider posts with minimum engagement
             if likes >= self.min_engagement_for_ratio:
