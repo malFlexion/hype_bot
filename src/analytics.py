@@ -81,11 +81,9 @@ class PostAnalytics:
             if isinstance(post, dict):
                 if 'indexed_at' in post and post['indexed_at']:
                     return parser.parse(post['indexed_at'])
-                record = post.get('record')
-                if record:
-                    created_at = record.get('created_at') if isinstance(record, dict) else getattr(record, 'created_at', None)
-                    if created_at:
-                        return parser.parse(created_at)
+                created_at = post.get('record_created_at')
+                if created_at:
+                    return parser.parse(created_at)
             else:
                 if hasattr(post, 'indexed_at'):
                     return parser.parse(post.indexed_at)

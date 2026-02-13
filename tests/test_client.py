@@ -71,7 +71,7 @@ class TestFetchAllPosts:
             ],
             cursor=None,
         )
-        posts = bsky_client.fetch_all_posts("did:plc:user1", max_posts=100)
+        posts = bsky_client.fetch_all_posts("did:plc:user1", max_posts=10000)
         assert len(posts) == 1
 
     def test_filters_reposts(self, client):

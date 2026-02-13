@@ -175,11 +175,16 @@ class BlueskyClient:
                             'reply_count': getattr(post, 'reply_count', 0),
                             'uri': getattr(post, 'uri', None),
                             'indexed_at': getattr(post, 'indexed_at', None),
-                            'record': None
+                            'record_text': None,
+                            'record_created_at': None
                         }
                         record = getattr(post, 'record', None)
                         if record:
-                            post_dict['record'] = record
+                            # Handle both object and dict for record
+                            text = record.get('text') if isinstance(record, dict) else getattr(record, 'text', None)
+                            created_at = record.get('created_at') if isinstance(record, dict) else getattr(record, 'created_at', None)
+                            post_dict['record_text'] = text
+                            post_dict['record_created_at'] = created_at
                         all_posts.append(post_dict)
 
                 if len(all_posts) >= max_posts:

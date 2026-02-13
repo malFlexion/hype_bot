@@ -14,7 +14,7 @@ class Config:
     # Optional settings with defaults
     POLL_INTERVAL: int = config("POLL_INTERVAL", default=30, cast=int)
     RECENT_DAYS: int = config("RECENT_DAYS", default=30, cast=int)
-    MAX_POSTS: int = config("MAX_POSTS", default=100000, cast=int)
+    MAX_POSTS: int = config("MAX_POSTS", default=10000, cast=int)
     LOG_LEVEL: str = config("LOG_LEVEL", default="INFO")
 
     # Health check server

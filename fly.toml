@@ -9,7 +9,7 @@ primary_region = "iad"  # US East - change to your preferred region
 [env]
   POLL_INTERVAL = "30"
   RECENT_DAYS = "30"
-  MAX_POSTS = "100000"
+  MAX_POSTS = "10000"
   LOG_LEVEL = "INFO"
   MIN_ENGAGEMENT_FOR_RATIO = "5"
 

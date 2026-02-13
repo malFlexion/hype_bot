@@ -83,13 +83,14 @@ class ResponseFormatter:
             Truncated post text
         """
         try:
-            record = post.get('record') if isinstance(post, dict) else getattr(post, 'record', None)
-            if record:
-                # Handle both dict and object for record
-                text = record.get('text') if isinstance(record, dict) else getattr(record, 'text', None)
-                if text:
-                    text = ' '.join(text.split())
-                    return f'"{self.truncate_text(text, self.MAX_TEXT_PREVIEW)}"'
+            if isinstance(post, dict):
+                text = post.get('record_text')
+            else:
+                record = getattr(post, 'record', None)
+                text = record.get('text') if isinstance(record, dict) else getattr(record, 'text', None) if record else None
+            if text:
+                text = ' '.join(text.split())
+                return f'"{self.truncate_text(text, self.MAX_TEXT_PREVIEW)}"'
         except Exception as e:
             logger.warning(f"Error extracting post text: {e}")
 

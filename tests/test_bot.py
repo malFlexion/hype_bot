@@ -34,7 +34,7 @@ class TestBlueskyBotProcessMention:
         """Create a bot with mocked dependencies."""
         client = MagicMock()
         config = SimpleNamespace(
-            MAX_POSTS=1000,
+            MAX_POSTS=10000,
             RECENT_DAYS=30,
             MIN_ENGAGEMENT_FOR_RATIO=5,
         )
