@@ -1,9 +1,10 @@
 """Bluesky API client wrapper using atproto SDK."""
 
 import logging
+import re
 import time
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from atproto import Client as AtProtoClient, models
 
 
@@ -157,6 +158,52 @@ class BlueskyClient:
         logger.info(f"Fetched {len(all_posts)} posts for {actor}")
         return all_posts
 
+    @staticmethod
+    def _detect_facets(text: str) -> Optional[List]:
+        """
+        Detect URLs in text and create Bluesky facets for them.
+
+        Bluesky requires explicit facets with UTF-8 byte offsets
+        to make links clickable in posts.
+
+        Args:
+            text: Post text to scan for URLs
+
+        Returns:
+            List of facet objects, or None if no URLs found
+        """
+        url_pattern = re.compile(
+            r'https?://[^\s\)\]\}>,"\']+',
+            re.IGNORECASE
+        )
+
+        text_bytes = text.encode('utf-8')
+        facets = []
+
+        for match in url_pattern.finditer(text):
+            url = match.group(0)
+            # Strip trailing punctuation that's likely not part of the URL
+            while url and url[-1] in '.,:;!?)':
+                url = url[:-1]
+
+            # Calculate byte offsets
+            start_char = match.start()
+            byte_start = len(text[:start_char].encode('utf-8'))
+            byte_end = byte_start + len(url.encode('utf-8'))
+
+            facet = models.AppBskyRichtextFacet.Main(
+                index=models.AppBskyRichtextFacet.ByteSlice(
+                    byte_start=byte_start,
+                    byte_end=byte_end,
+                ),
+                features=[
+                    models.AppBskyRichtextFacet.Link(uri=url)
+                ],
+            )
+            facets.append(facet)
+
+        return facets if facets else None
+
     def send_post(self, text: str) -> Optional[str]:
         """
         Send a standalone post.
@@ -168,7 +215,8 @@ class BlueskyClient:
             URI of created post, or None if failed
         """
         try:
-            response = self.client.send_post(text=text)
+            facets = self._detect_facets(text)
+            response = self.client.send_post(text=text, facets=facets)
             uri = response.uri if hasattr(response, 'uri') else None
             logger.info(f"Posted: {text[:50]}...")
             return uri
@@ -223,8 +271,11 @@ class BlueskyClient:
                 root=root_ref
             )
 
+            # Detect URL facets for clickable links
+            facets = self._detect_facets(text)
+
             # Send the reply
-            response = self.client.send_post(text=text, reply_to=reply)
+            response = self.client.send_post(text=text, reply_to=reply, facets=facets)
             uri = response.uri if hasattr(response, 'uri') else None
             cid = response.cid if hasattr(response, 'cid') else None
 

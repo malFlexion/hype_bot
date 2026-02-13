@@ -35,4 +35,4 @@ primary_region = "iad"  # US East - change to your preferred region
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"
