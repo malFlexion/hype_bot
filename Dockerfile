@@ -1,7 +1,7 @@
 # Multi-stage build for Bluesky bot
 
 # Stage 1: Build stage
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --user --no-cache-dir --retries 10 --timeout 60 -r requirements.txt
 
 # Stage 2: Runtime stage
 FROM python:3.11-slim
