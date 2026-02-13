@@ -3,12 +3,33 @@
 import logging
 import re
 import time
+from html.parser import HTMLParser
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 from atproto import Client as AtProtoClient, models
 
 
 logger = logging.getLogger(__name__)
+
+_URL_PATTERN = re.compile(r'https?://[^\s\)\]\}>,"\']+', re.IGNORECASE)
+
+
+class _OGParser(HTMLParser):
+    """Minimal OpenGraph meta tag parser."""
+
+    def __init__(self):
+        super().__init__()
+        self.og = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'meta':
+            return
+        attrs_dict = dict(attrs)
+        prop = attrs_dict.get('property', '')
+        if prop.startswith('og:') and 'content' in attrs_dict:
+            self.og[prop[3:]] = attrs_dict['content']
 
 
 class BlueskyClient:
@@ -36,24 +57,28 @@ class BlueskyClient:
             logger.error(f"✗ Authentication failed: {e}")
             raise
 
-    def get_notifications(self, seen_at: Optional[str] = None) -> List[Any]:
+    def get_notifications(self, since: Optional[str] = None) -> List[Any]:
         """
-        Fetch new notifications since the given timestamp.
+        Fetch notifications, optionally filtered to those after a timestamp.
 
         Args:
-            seen_at: ISO timestamp of last seen notification (optional)
+            since: ISO timestamp — only return notifications indexed after this time
 
         Returns:
             List of notification objects
         """
         try:
-            params = {}
-            if seen_at:
-                params['seen_at'] = seen_at
-
-            response = self.client.app.bsky.notification.list_notifications(params=params)
+            response = self.client.app.bsky.notification.list_notifications()
 
             notifications = response.notifications if hasattr(response, 'notifications') else []
+
+            # Filter client-side by timestamp since the API no longer supports seenAt
+            if since and notifications:
+                notifications = [
+                    n for n in notifications
+                    if hasattr(n, 'indexed_at') and n.indexed_at > since
+                ]
+
             logger.info(f"Fetched {len(notifications)} notifications")
             return notifications
 
@@ -71,7 +96,7 @@ class BlueskyClient:
         Returns:
             List of mention notifications
         """
-        notifications = self.get_notifications(seen_at)
+        notifications = self.get_notifications(since=seen_at)
         mentions = [n for n in notifications if n.reason == 'mention']
         logger.info(f"Found {len(mentions)} new mentions")
         return mentions
@@ -115,7 +140,7 @@ class BlueskyClient:
             logger.error(f"Error fetching feed for {actor}: {e}")
             return {'feed': [], 'cursor': None}
 
-    def fetch_all_posts(self, actor: str, max_posts: int = 1000) -> List[Any]:
+    def fetch_all_posts(self, actor: str, max_posts: int = 100000) -> List[Any]:
         """
         Fetch all posts from a user with pagination.
 
@@ -172,15 +197,9 @@ class BlueskyClient:
         Returns:
             List of facet objects, or None if no URLs found
         """
-        url_pattern = re.compile(
-            r'https?://[^\s\)\]\}>,"\']+',
-            re.IGNORECASE
-        )
-
-        text_bytes = text.encode('utf-8')
         facets = []
 
-        for match in url_pattern.finditer(text):
+        for match in _URL_PATTERN.finditer(text):
             url = match.group(0)
             # Strip trailing punctuation that's likely not part of the URL
             while url and url[-1] in '.,:;!?)':
@@ -204,6 +223,68 @@ class BlueskyClient:
 
         return facets if facets else None
 
+    @staticmethod
+    def _fetch_og_metadata(url: str) -> Dict[str, str]:
+        """Fetch OpenGraph metadata from a URL."""
+        req = Request(url, headers={'User-Agent': 'HypeBot/1.0'})
+        with urlopen(req, timeout=10) as resp:
+            # Read enough to get the <head> section
+            html = resp.read(32768).decode('utf-8', errors='ignore')
+        parser = _OGParser()
+        parser.feed(html)
+        return parser.og
+
+    def _create_external_embed(self, url: str) -> Optional[Any]:
+        """
+        Create an external embed (link card) for a URL by fetching
+        its OpenGraph metadata and thumbnail image.
+
+        Args:
+            url: The URL to create a link card for
+
+        Returns:
+            External embed object, or None if failed
+        """
+        try:
+            og = self._fetch_og_metadata(url)
+            title = og.get('title', url)
+            description = og.get('description', '')
+
+            # Upload thumbnail if available
+            thumb = None
+            image_url = og.get('image')
+            if image_url:
+                try:
+                    img_req = Request(image_url, headers={'User-Agent': 'HypeBot/1.0'})
+                    with urlopen(img_req, timeout=10) as img_resp:
+                        img_data = img_resp.read(1_000_000)  # 1MB max
+                        content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
+                    thumb = self.client.upload_blob(img_data)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch/upload thumbnail: {e}")
+
+            external = models.AppBskyEmbedExternal.External(
+                uri=url,
+                title=title,
+                description=description,
+                thumb=thumb.blob if thumb else None,
+            )
+            return models.AppBskyEmbedExternal.Main(external=external)
+
+        except Exception as e:
+            logger.warning(f"Failed to create external embed for {url}: {e}")
+            return None
+
+    def _extract_first_url(self, text: str) -> Optional[str]:
+        """Extract the first URL from text."""
+        match = _URL_PATTERN.search(text)
+        if match:
+            url = match.group(0)
+            while url and url[-1] in '.,:;!?)':
+                url = url[:-1]
+            return url
+        return None
+
     def send_post(self, text: str) -> Optional[str]:
         """
         Send a standalone post.
@@ -216,7 +297,9 @@ class BlueskyClient:
         """
         try:
             facets = self._detect_facets(text)
-            response = self.client.send_post(text=text, facets=facets)
+            url = self._extract_first_url(text)
+            embed = self._create_external_embed(url) if url else None
+            response = self.client.send_post(text=text, facets=facets, embed=embed)
             uri = response.uri if hasattr(response, 'uri') else None
             logger.info(f"Posted: {text[:50]}...")
             return uri
@@ -271,11 +354,13 @@ class BlueskyClient:
                 root=root_ref
             )
 
-            # Detect URL facets for clickable links
+            # Detect URL facets and create link card embed
             facets = self._detect_facets(text)
+            url = self._extract_first_url(text)
+            embed = self._create_external_embed(url) if url else None
 
             # Send the reply
-            response = self.client.send_post(text=text, reply_to=reply, facets=facets)
+            response = self.client.send_post(text=text, reply_to=reply, facets=facets, embed=embed)
             uri = response.uri if hasattr(response, 'uri') else None
             cid = response.cid if hasattr(response, 'cid') else None
 
@@ -297,7 +382,9 @@ class BlueskyClient:
             True if successful, False otherwise
         """
         try:
-            self.client.app.bsky.notification.update_seen({'seen_at': seen_at})
+            self.client.app.bsky.notification.update_seen(
+                models.AppBskyNotificationUpdateSeen.Data(seen_at=seen_at)
+            )
             self._last_seen_at = seen_at
             logger.debug(f"Updated seen notifications to {seen_at}")
             return True
