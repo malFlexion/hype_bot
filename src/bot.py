@@ -1,8 +1,10 @@
 """Main bot orchestration and mention processing."""
 
+import json
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Set
 from .client import BlueskyClient
 from .analytics import PostAnalytics
@@ -14,12 +16,36 @@ logger = logging.getLogger(__name__)
 
 
 class MentionTracker:
-    """Track processed mentions to avoid duplicates."""
+    """Track processed mentions to avoid duplicates, persisted to a JSON file."""
 
-    def __init__(self):
-        """Initialize mention tracker."""
+    def __init__(self, data_dir: str = "data"):
+        """Initialize mention tracker with file-based persistence."""
+        self._file = Path(data_dir) / "processed.json"
+        self._file.parent.mkdir(parents=True, exist_ok=True)
         self.processed_uris: Set[str] = set()
         self.last_seen_at: Optional[str] = None
+        self._load()
+
+    def _load(self) -> None:
+        """Load state from disk."""
+        if self._file.exists():
+            try:
+                data = json.loads(self._file.read_text())
+                self.processed_uris = set(data.get("processed_uris", []))
+                self.last_seen_at = data.get("last_seen_at")
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Failed to load tracker state: {e}")
+
+    def _save(self) -> None:
+        """Save state to disk."""
+        try:
+            data = {
+                "processed_uris": list(self.processed_uris),
+                "last_seen_at": self.last_seen_at,
+            }
+            self._file.write_text(json.dumps(data))
+        except OSError as e:
+            logger.error(f"Failed to save tracker state: {e}")
 
     def is_processed(self, uri: str) -> bool:
         """Check if a mention has been processed."""
@@ -28,11 +54,13 @@ class MentionTracker:
     def mark_processed(self, uri: str) -> None:
         """Mark a mention as processed."""
         self.processed_uris.add(uri)
+        self._save()
         logger.debug(f"Marked {uri} as processed")
 
     def update_last_seen(self, timestamp: str) -> None:
         """Update the last seen timestamp."""
         self.last_seen_at = timestamp
+        self._save()
 
 
 class BlueskyBot:
@@ -128,7 +156,6 @@ class BlueskyBot:
             thread_posts = self.formatter.create_thread_responses(
                 top_recent=analysis['top_recent'],
                 top_all_time=analysis['top_all_time'],
-                most_ratioed=analysis['most_ratioed'],
                 handle=author_handle,
                 recent_days=self.config.RECENT_DAYS
             )
